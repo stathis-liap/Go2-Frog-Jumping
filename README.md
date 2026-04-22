@@ -128,3 +128,6 @@ source ~/Quadruped_Project/go2_env/bin/activate
 cd ~/Quadruped_Project/frog_jump
 python main_jump.py
 ```
+## Common Issues
+
+If the Mujoco Simulation runs, however the physics are frozen, go to `/unitree_mujoco/simulate_python` in the `config.py` file and change **USE_JOYSTICK = 1** to **USE_JOYSTICK = 0**.
