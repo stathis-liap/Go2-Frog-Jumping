@@ -43,7 +43,7 @@ source go2_env/bin/activate
 This allows your Python scripts to communicate with the Go2 (or the simulator) over the internal DDS network.
 
 ```bash
-git clone [https://github.com/unitreerobotics/unitree_sdk2py.git](https://github.com/unitreerobotics/unitree_sdk2py.git)
+git clone https://github.com/unitreerobotics/unitree_sdk2py.git
 cd unitree_sdk2py
 pip install -e .
 cd ..
@@ -56,16 +56,16 @@ This is the official physics simulator that mimics the Go2's hardware and DDS ne
 pip install mujoco
 
 # Clone the Unitree simulation repository
-git clone [https://github.com/unitreerobotics/unitree_mujoco.git](https://github.com/unitreerobotics/unitree_mujoco.git)
+git clone https://github.com/unitreerobotics/unitree_mujoco.git
 ```
 
 ### 4. Install the Bayesian Optimization Library
 ```bash
-pip install git+[https://github.com/bayesian-optimization/BayesianOptimization.git](https://github.com/bayesian-optimization/BayesianOptimization.git)
+pip install git+https://github.com/bayesian-optimization/BayesianOptimization.git
 ```
 ### 5. Clone this Repository
 ```bash
-git clone [https://github.com/](https://github.com/)stathis-liap/Go2-Frog-Jumping.git frog_jump
+git clone https://github.com/stathis-liap/Go2-Frog-Jumping.git frog_jump
 cd frog_jump
 pip install numpy
 ```
