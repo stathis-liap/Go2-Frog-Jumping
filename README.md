@@ -117,7 +117,7 @@ This spins up MuJoCo and the simulated DDS network.
 ```bash
 source ~/Quadruped_Project/go2_env/bin/activate
 cd ~/Quadruped_Project/unitree_mujoco/simulate_python
-python unitree_mujoco.py
+python simulation_auto.py
 ```
 
 ### Terminal 2 — Run the Jumping Controller
