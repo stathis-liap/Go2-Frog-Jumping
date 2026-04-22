@@ -52,6 +52,8 @@ cd ..
 ### 3. Install the Unitree MuJoCo Simulator
 This is the official physics simulator that mimics the Go2's hardware and DDS network.
 ```bash
+cd ~/Quadruped_Project
+
 # Install the MuJoCo engine
 pip install mujoco
 
