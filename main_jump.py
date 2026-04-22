@@ -3,6 +3,7 @@ import numpy as np
 import sys
 import select
 import config
+import socket
 from force_generator import JumpForceGenerator
 from controllers import LegController, calculate_vmc_forces
 from gp_optimizer import JumpOptimizer
@@ -46,7 +47,7 @@ class FrogJumpExperiment:
         self.nominal_p_world = []
         for leg in range(4):
             side_sign = 1.0 if leg in [1, 3] else -1.0
-            p_leg = np.array([0.0, side_sign * 0.0955, -0.22])
+            p_leg = np.array([0.0, side_sign * 0.0955, -0.28])
             self.nominal_p_world.append(p_leg)
 
     def _low_state_handler(self, msg: LowState_):
@@ -75,7 +76,7 @@ class FrogJumpExperiment:
         return q, dq, roll, pitch, true_x_position
 
 
-    def run_unified_paper_loop(self, f0, f1, Fx, Fy, Fz):
+    def main_loop(self, f0, f1, Fx, Fy, Fz):
         q, dq, roll, pitch, _ = self.get_robot_state()
         
         # print(f"IMU Alive -> Pitch: {pitch:.3f} | Roll: {roll:.3f}")
@@ -121,24 +122,22 @@ class FrogJumpExperiment:
     def execute_single_jump(self, params):
         f0, f1 = params['f0'], 1.0
         Fx, Fy, Fz = params['Fx'], 0.0, params['Fz'] 
-
-        # print(">>> STANDING ON PURE MATH... Press ENTER to JUMP <<<")
         
         jumping = False
         landing = False
         landing_counter = 0
         x_init = 0.0
         
+        # Start a timer to automatically trigger the jump after standing
+        stand_start_time = time.time()
+        
         while True:
             if not jumping and not landing:
-                self.run_unified_paper_loop(f0, f1, 0.0, 0.0, 0.0)
+                self.main_loop(f0, f1, 0.0, 0.0, 0.0)
                 
-                if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
-                    sys.stdin.readline()
-                    
-                    # print(f"--- Jump Impulse [Fx:{Fx:.1f}, Fz:{Fz:.1f}] ---")
+                #Automatically jump after 1.5 seconds of holding the stand
+                if time.time() - stand_start_time > 2.0:
                     self.cpg.theta = np.pi 
-                    
                     self.estimated_vx = 0.0
                     self.estimated_x = 0.0
                     self.last_time = time.time()
@@ -146,24 +145,27 @@ class FrogJumpExperiment:
                     jumping = True
                     
             elif jumping:
-                done = self.run_unified_paper_loop(f0, f1, Fx, Fy, Fz)
+                done = self.main_loop(f0, f1, Fx, Fy, Fz)
                 if done:
-                    # print("Impulse complete. Catching landing...")
                     jumping = False
                     landing = True
                     
             elif landing:
-                self.run_unified_paper_loop(f0, f1, 0.0, 0.0, 0.0)
+                self.main_loop(f0, f1, 0.0, 0.0, 0.0)
                 landing_counter += 1
-                if landing_counter >= 1500:
+                if landing_counter >= 2000: # 1.5 seconds of landing stabilization
                     break
                     
+            # -------------------------------------------------------------
             # THE GUARD: Fall Detection
+            # -------------------------------------------------------------
             _, _, roll, pitch, _ = self.get_robot_state()
             
-            if abs(roll) > 1.0 or abs(pitch) > 1.0:
-                # print(f"!!! CRASH DETECTED !!! (Roll: {roll:.2f}, Pitch: {pitch:.2f})")
+            # Roll threshold: ~45 degrees (0.8 rad). Sideways flips are always bad.
+            # Pitch threshold: ~85 degrees (1.5 rad). Allow violent forward/back swinging!
+            if abs(roll) > 0.8 or abs(pitch) > 1.5:
                 
+                # Kill motors
                 for i in range(12):
                     self.low_cmd.motor_cmd[i].tau = 0.0
                     self.low_cmd.motor_cmd[i].kp = 0.0
@@ -171,26 +173,32 @@ class FrogJumpExperiment:
                 self.low_cmd.crc = self.crc.Crc(self.low_cmd)
                 self.cmd_pub.Write(self.low_cmd)
                 
-                # Zero the objective function
-                return 0.0
-            # -------------------------------------------------------------
+                return 0.0 # Return 0 for a crash
 
             time.sleep(0.001)
 
         _, _, _, _, x_final = self.get_robot_state()
         return x_final - x_init
 
-    def run_optimization(self, trials=10):
-        # print("Starting Quadruped-Frog Online Optimization...")
+    def run_optimization(self, trials=50):
+        # print("Starting Autonomous Quadruped-Frog Optimization...")
+        
+        # Setup the UDP sender
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        
         for i in range(trials):
-            # print(f"\n[Trial {i+1}/10] Reset MuJoCo and wait...")
-            input()
+            # 1. COMMAND THE SIMULATOR TO RESET
+            sock.sendto(b"RESET", ('localhost', 9876))
+            
+            # 2. Give the physics engine 1.5 seconds to drop the robot and let it settle
+            time.sleep(2.0) 
+            
             params = self.optimizer.get_next_parameters()
             score = self.execute_single_jump(params)
             self.optimizer.register_result(params, score)
+            
         print("\n--- Optimization Complete ---")
-        print(f"\n Best results {self.optimizer.get_best_jump()}")
 
 if __name__ == '__main__':
     experiment = FrogJumpExperiment()
-    experiment.run_optimization(trials=10)
+    experiment.run_optimization(trials=50)
