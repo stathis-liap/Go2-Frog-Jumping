@@ -3,11 +3,7 @@ from bayes_opt.acquisition import UpperConfidenceBound
 import config
 
 class JumpOptimizer:
-    def __init__(self, random_state=42):
-        """
-        Initializes the Gaussian Process Bayesian Optimizer (V2 API).
-        Custom logging implemented to match the paper's optimization graphs.
-        """
+    def __init__(self, random_state=30):
         self.pbounds = {
             'f0': config.BOUNDS_F0,
             'Fx': config.BOUNDS_FX,

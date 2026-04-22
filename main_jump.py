@@ -44,10 +44,16 @@ class FrogJumpExperiment:
         self.estimated_x = 0.0
         self.last_time = time.time()
         
+        # Initialize the array container (values will be set dynamically)
+        self.nominal_p_world = []
+        self.set_nominal_height(-0.2) # Default to crouch on startup
+
+    def set_nominal_height(self, z_height):
+        """Updates the target resting height of the robot."""
         self.nominal_p_world = []
         for leg in range(4):
             side_sign = 1.0 if leg in [1, 3] else -1.0
-            p_leg = np.array([0.0, side_sign * 0.0955, -0.28])
+            p_leg = np.array([0.0, side_sign * 0.0955, z_height])
             self.nominal_p_world.append(p_leg)
 
     def _low_state_handler(self, msg: LowState_):
@@ -79,8 +85,6 @@ class FrogJumpExperiment:
     def main_loop(self, f0, f1, Fx, Fy, Fz):
         q, dq, roll, pitch, _ = self.get_robot_state()
         
-        # print(f"IMU Alive -> Pitch: {pitch:.3f} | Roll: {roll:.3f}")
-        
         from controllers import get_rotation_matrix
         R = get_rotation_matrix(roll, pitch)
         P_base = np.array([[1, 1, -1, -1], [-1, 1, -1, 1], [0, 0, 0, 0]])
@@ -105,7 +109,8 @@ class FrogJumpExperiment:
                 R=R
             )
             
-            # tau = np.clip(tau, -35.0, 35.0)
+            # --- CRITICAL: Prevents MuJoCo physics explosions! ---
+            #tau = np.clip(tau, -35.0, 35.0)
             
             for j in range(3):
                 idx = leg*3 + j
@@ -121,21 +126,23 @@ class FrogJumpExperiment:
 
     def execute_single_jump(self, params):
         f0, f1 = params['f0'], 1.0
-        Fx, Fy, Fz = params['Fx'], 0.0, params['Fz'] 
+        Fx, Fy, Fz = params['Fx'], params.get('Fy', 0.0), params['Fz'] 
         
         jumping = False
         landing = False
         landing_counter = 0
         x_init = 0.0
         
-        # Start a timer to automatically trigger the jump after standing
         stand_start_time = time.time()
+        
+        # PREPARE: Set to crouched position before jumping
+        self.set_nominal_height(-0.2)
         
         while True:
             if not jumping and not landing:
                 self.main_loop(f0, f1, 0.0, 0.0, 0.0)
                 
-                #Automatically jump after 1.5 seconds of holding the stand
+                # Automatically jump after 2 seconds
                 if time.time() - stand_start_time > 2.0:
                     self.cpg.theta = np.pi 
                     self.estimated_vx = 0.0
@@ -143,17 +150,32 @@ class FrogJumpExperiment:
                     self.last_time = time.time()
                     _, _, _, _, x_init = self.get_robot_state()
                     jumping = True
+                    # (Removed the instant snap to -0.32 from here)
                     
             elif jumping:
+                # ---> THE FIX: Smoothly deploy legs during the thrust <---
+                # Read the current target height of the first leg
+                current_z = self.nominal_p_world[0][2] 
+                
+                # If we haven't reached full extension yet, lower it by 2mm
+                if current_z > -0.32:
+                    self.set_nominal_height(current_z - 0.002) 
+                # ---------------------------------------------------------
+                
                 done = self.main_loop(f0, f1, Fx, Fy, Fz)
                 if done:
                     jumping = False
                     landing = True
                     
             elif landing:
+                # Continue smooth deployment just in case the jump was fast
+                current_z = self.nominal_p_world[0][2] 
+                if current_z > -0.32:
+                    self.set_nominal_height(current_z - 0.002)
+                    
                 self.main_loop(f0, f1, 0.0, 0.0, 0.0)
                 landing_counter += 1
-                if landing_counter >= 2000: # 1.5 seconds of landing stabilization
+                if landing_counter >= 2000: 
                     break
                     
             # -------------------------------------------------------------
@@ -161,11 +183,7 @@ class FrogJumpExperiment:
             # -------------------------------------------------------------
             _, _, roll, pitch, _ = self.get_robot_state()
             
-            # Roll threshold: ~45 degrees (0.8 rad). Sideways flips are always bad.
-            # Pitch threshold: ~85 degrees (1.5 rad). Allow violent forward/back swinging!
-            if abs(roll) > 0.8 or abs(pitch) > 1.5:
-                
-                # Kill motors
+            if abs(roll) > 1.0 or abs(pitch) > 1.6:
                 for i in range(12):
                     self.low_cmd.motor_cmd[i].tau = 0.0
                     self.low_cmd.motor_cmd[i].kp = 0.0
@@ -181,8 +199,6 @@ class FrogJumpExperiment:
         return x_final - x_init
 
     def run_optimization(self, trials=50):
-        # print("Starting Autonomous Quadruped-Frog Optimization...")
-        
         # Setup the UDP sender
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         
@@ -190,7 +206,7 @@ class FrogJumpExperiment:
             # 1. COMMAND THE SIMULATOR TO RESET
             sock.sendto(b"RESET", ('localhost', 9876))
             
-            # 2. Give the physics engine 1.5 seconds to drop the robot and let it settle
+            # 2. Give the physics engine 2.0 seconds to drop the robot and let it settle
             time.sleep(2.0) 
             
             params = self.optimizer.get_next_parameters()
