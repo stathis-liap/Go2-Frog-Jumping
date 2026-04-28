@@ -14,9 +14,9 @@ def get_rotation_matrix(roll, pitch):
 def calculate_vmc_forces(R, P_base):
     k_att = config.K_ATTITUDE
     
-    # [OPTIONAL UPGRADE]: True metric dimensions for the Unitree Go2 hips
-    Lx = 1.0  # meters from center to front/back hips
-    Ly = 1.0  # meters from center to left/right hips
+    # OPTIONAL UPGRADE: True metric dimensions for the Unitree Go2 hips
+    Lx = 1.0 
+    Ly = 1.0  
     
     P_base_true = np.array([
         [ Lx,  Lx, -Lx, -Lx],
@@ -28,7 +28,6 @@ def calculate_vmc_forces(R, P_base):
 
     F_VMC_world = np.zeros((3, 4))
     
-    # Negative sign ensures it pushes against the floor
     F_VMC_world[2, :] = k_att * (np.array([0, 0, 1]) @ P)  
 
     return R.T @ F_VMC_world
@@ -36,7 +35,6 @@ def calculate_vmc_forces(R, P_base):
 
 class LegController:
     def __init__(self):
-        # Assumes config variables are scalar floats, e.g., 400.0
         self.Kp       = config.KP_CARTESIAN * np.eye(3)
         self.Kd       = config.KD_CARTESIAN * np.eye(3)
         self.Kd_joint = config.KD_JOINT     * np.eye(3)

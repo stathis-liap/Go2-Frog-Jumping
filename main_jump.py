@@ -128,7 +128,6 @@ class FrogJumpExperiment:
     def execute_single_jump(self, params):
         f1 = 1.0 # Fixed flight phase frequency
         
-        # Everything starts exactly at 0.0
         f0_arr = np.zeros(4)
         Fx_arr = np.zeros(4)
         Fy_arr = np.zeros(4)
@@ -150,7 +149,7 @@ class FrogJumpExperiment:
             Fz_arr[0] = Fz_arr[1] = params['Fz_front']
             Fz_arr[2] = Fz_arr[3] = params['Fz_back']
             
-            # [FIXED]: Invert left legs to push in the same world direction
+            # Invert left legs to push in the same world direction
             Fy_arr[0] = params['Fy_front']
             Fy_arr[1] = -params['Fy_front']
             Fy_arr[2] = params['Fy_back']
@@ -164,7 +163,7 @@ class FrogJumpExperiment:
             Fz_arr[1] = Fz_arr[3] = params['Fz_left']
             Fz_arr[0] = Fz_arr[2] = params['Fz_right']
             
-            # [FIXED]: Invert left legs to push in the same world direction
+            # Invert left legs to push in the same world direction
             Fy_arr[0] = Fy_arr[2] = params['Fy_right']
             Fy_arr[1] = Fy_arr[3] = -params['Fy_left']
             # Fx_arr remains completely zeroed
@@ -175,7 +174,7 @@ class FrogJumpExperiment:
 
         x_init, y_init, yaw_init = 0.0, 0.0, 0.0
         
-        # Start in a deep crouch (-0.2m) to build potential energy
+        # Start in a deep crouch (-0.2m) 
         self.set_nominal_height(-0.24)
         stand_start_time = time.time()
         
@@ -195,7 +194,6 @@ class FrogJumpExperiment:
                     jumping = True
 
             elif jumping:
-                # Apply the FULL optimizer vector (Fx, Fy, Fz)
                 done = self.main_loop(f0_arr, f1, Fx_arr, Fy_arr, Fz_arr)
                 if done:
                     jumping = False
@@ -206,7 +204,6 @@ class FrogJumpExperiment:
                 if current_z > -0.30:
                     self.set_nominal_height(current_z - 0.0005) 
                     
-                # Use zero forces to absorb landing with PD Controller
                 self.main_loop(f0_arr, f1, zero_arr, zero_arr, zero_arr)
                 landing_counter += 1
                 if landing_counter >= 2000:
@@ -230,13 +227,13 @@ class FrogJumpExperiment:
 
         # Score calculations with absolute values to prevent punishing "wrong direction" jumps
         if self.jump_type == 'forward':
-            return x_final - x_init                    
+            return abs(x_final - x_init)                    
         elif self.jump_type == 'lateral':
-            return y_final - y_init                    
+            return abs(y_final - y_init)                    
         elif self.jump_type == 'twist':
-            return yaw_final - yaw_init                
+            return abs(yaw_final - yaw_init)                
         else:
-            return x_final - x_init
+            return abs(x_final - x_init)
 
     def run_optimization(self, trials=50):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -270,4 +267,4 @@ if __name__ == '__main__':
     print(f"\n[+] Optimizing for: {selected_jump.upper()} JUMP\n")
     
     experiment = FrogJumpExperiment(jump_type=selected_jump)
-    experiment.run_optimization(trials=200)
+    experiment.run_optimization(trials=50)

@@ -3,7 +3,7 @@ import numpy as np
 class JumpForceGenerator:
     def __init__(self, dt=0.001):
         self.dt = dt
-        # [UPGRADE]: The CPG now tracks 4 independent clocks, one for each leg!
+        # The CPG tracks 4 independent clocks, one for each leg!
         self.theta = np.zeros(4) 
 
     def reset(self):
