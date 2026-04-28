@@ -3,24 +3,38 @@ import numpy as np
 class JumpForceGenerator:
     def __init__(self, dt=0.001):
         self.dt = dt
-        self.theta = 0.0
+        # [UPGRADE]: The CPG now tracks 4 independent clocks, one for each leg!
+        self.theta = np.zeros(4) 
 
     def reset(self):
-        self.theta = np.pi + 0.001 
+        self.theta = np.full(4, np.pi + 0.001)
 
-    def step(self, f0, f1, Fx, Fy, Fz):
-        f = f1 if self.theta < np.pi else f0
-        self.theta += 2.0 * np.pi * f * self.dt
+    def step(self, f0_arr, f1, Fx_arr, Fy_arr, Fz_arr):
+        # f0_arr is now an array of 4 different frequencies
+        f = np.where(self.theta < np.pi, f1, f0_arr)
         
-        done = False
-        if self.theta >= 2.0 * np.pi:
-            self.theta = 0.0
-            done = True 
+        # Advance each leg's clock at its own unique speed
+        self.theta += 2.0 * np.pi * f * self.dt
+
+        # The overall jump is only "done" when the slowest leg finishes pushing
+        done = np.all(self.theta >= 2.0 * np.pi)
+        if done:
+            self.theta = np.zeros(4)
 
         sin_theta = np.sin(self.theta)
-        if sin_theta < 0 and not done:
-            F_foot = np.array([-Fx, Fy, -Fz]) * (-sin_theta)  
-        else:
-            F_foot = np.zeros(3)
 
-        return F_foot, self.theta, done
+        # Leg order: 0=FR, 1=FL, 2=RR, 3=RL
+        side_signs = np.array([1.0, -1.0, 1.0, -1.0])
+
+        forces = np.zeros((3, 4))
+        
+        for leg in range(4):
+            # Only apply force if THIS specific leg is still in its push phase
+            if sin_theta[leg] < 0 and self.theta[leg] < 2.0 * np.pi:
+                forces[:, leg] = np.array([
+                    Fx_arr[leg],
+                    Fy_arr[leg] * side_signs[leg], 
+                    Fz_arr[leg]
+                ]) * (sin_theta[leg])
+
+        return forces, self.theta, done
